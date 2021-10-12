@@ -1,0 +1,21 @@
+{
+    "collab_server" : "",
+    "contents" : "#Factored in races with 2 sessions…now we need to account for them in the DF by aggregating them...?\nlibrary(tabulizer)\nlibrary(miniUI)\nlibrary(zoo)\nlibrary(RCurl)\nlibrary(tidyverse)\nlibrary(lubridate)\nlibrary(httr)\n\n# session <- c(\"FP1\",\"FP2\", \"FP3\", \"FP4\", \"Q1\", \"Q2\", \"WUP\")\n# event <- c(\"QAT\",\"AME\", \"SPA\", \"FRA\", \"ITA\", \"CAT\", \"NED\", \"GER\",\"IND\",\"AUT\", \"CZE\", \"GBR\", \"RSM\",\"ARA\",\"JPN\",\"AUS\",\"MAL\",\"VAL\")\n# year <- c(2014,2015,2016)\n# type <- c(\"Classification\")##, \"Analysis\")\n# x <- as.matrix(data.table::CJ(event, session, type, year))\ndatalist = list()\n\nx <- as.matrix(read.csv(\"Sessions_Raw.csv\"))\n\n\n\n\n##Loop through the sessions\nfor ( i in seq(nrow(x))) {\n  url <- x[i,3]\n  if(url.exists(url)){\n    dat <- data.frame(extract_tables(url, pages = 1, guess = FALSE, area = list(c(128.296875, 26.403125, 709.9093750000001, 584.215625))), stringsAsFactors = FALSE)\n    dat <- dat[-1,]\n    dat$url <- url\n    dat$Session <- x[i,1]\n    dat$Event   <- x[i,2]\n    dat$Year    <- x[i,4]\n    datalist[[i]] <- dat\n    print(paste(i,\"of\", nrow(x),\"-\", x[i,4],\"-\",x[i,2],\"-\",x[i,1],sep = \" \"))\n    } else {\n      print(paste(i,\"of\", nrow(x),\"-\", x[i,4],\"-\",x[i,2],\"-\",x[i,1],\"---------Bad\",sep = \" \"))\n      next\n    }\n\nwrite.csv(df, \"BigLoad.csv\")\n\n\n\n# opts <- list(\n#   proxy         = \"userproxy.biperf.com\",\n#   proxyusername = \"boyc\", \n#   proxypassword = \"Fall2016\", \n#   proxyport     = 8080\n# )\n# \n# \n# ##Loop through the sessions\n# for ( i in seq(nrow(x))) {\n#   url <- paste(\"http://resources.motogp.com/files/results/2016/\", x[i,1], \"/MotoGP/\"\n#                , x[i,2],\"/\",x[i,3],\".pdf\", sep = \"\")\n#   if(url.exists(url, .opts = opts)){\n#     dat <- data.frame(extract_tables(url, pages = 1, guess = FALSE, area = list(c(128.296875, 26.403125, 709.9093750000001, 584.215625))), stringsAsFactors = FALSE)\n#     dat <- dat[-1,]\n#     dat$url <- url\n#     dat$Session <- x[i,2]\n#     dat$Event   <- x[i,1]\n#     datalist[[i]] <- dat\n#     print(paste(i,\"of\", nrow(x),sep = \" \"))} else {\n#       break\n#     }\n# }\n\n\n\n\n\ndf <- bind_rows(datalist)\n\nTrimmed <- df %>%\n  apply(2,trim) %>%\n  cbind() %>%\n  as_data_frame()\n\nTrimmed[Trimmed == \"\"] <- NA\n\nSperated <- Trimmed %>%\n  separate(X8, into = c(\"FastLap\", \"TotalLaps\"), sep = \" \", convert = TRUE) %>%\n  separate(X9, into = c(\"GapFront\", \"GapNext\"), sep = \" \", convert = TRUE) %>%\n  mutate(Status = ifelse( !grepl(\"\\\\d\",X1), X1, \"Finish\")) %>%\n  fill(Status) %>%\n\n",
+    "created" : 1474929805267.000,
+    "dirty" : true,
+    "encoding" : "UTF-8",
+    "folds" : "",
+    "hash" : "3897805363",
+    "id" : "895523D3",
+    "lastKnownWriteTime" : 1475341625,
+    "last_content_update" : 1475547991240,
+    "path" : "~/MotoGP Stats/Race_Classification_Load.R",
+    "project_path" : "Race_Classification_Load.R",
+    "properties" : {
+        "tempName" : "Untitled1"
+    },
+    "relative_order" : 1,
+    "source_on_save" : false,
+    "source_window" : "",
+    "type" : "r_source"
+}

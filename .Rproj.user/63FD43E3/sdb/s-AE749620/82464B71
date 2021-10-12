@@ -1,0 +1,21 @@
+{
+    "collab_server" : "",
+    "contents" : "library(tabulizer)\nlibrary(dplyr)\nlibrary(miniUI)\nlibrary(stringr)\nlibrary(lubridate)\nlibrary(data.table)  #Used for Cross Joining our\n\nsession <- c(\"FP1\")#, \"FP2\", \"FP3\", \"FP4\", \"Q1\", \"Q2\", \"WUP\")\nevent <- c(\"QAT\",\"ARG\",\"AME\", \"SPA\", \"FRA\", \"ITA\", \"CAT\", \"NED\", \"GER\", \"AUT\", \"CZE\", \"GBR\", \"RSM\")\ntype <- c(\"Classification\")#, \"Analysis\")\nx <- as.matrix(CJ(event, session, type))\ndatalist = list()\n\n##Loop through the sessions  \nfor ( i in seq(nrow(x))) {\n  url <- paste(\"http://resources.motogp.com/files/results/2016/\", x[i,1], \"/MotoGP/\"\n               , x[i,2],\"/\",x[i,3],\".pdf\", sep = \"\")\n  dat <- data.frame(extract_areas(url), stringsAsFactors = FALSE)\n  dat <- dat[-1,]\n  dat$url <- url\n  dat$Session <- x[i,2]\n  dat$Event   <- x[i,1]\n  dat$BestTime <- \n    datalist[[i]] <- dat\n  print(url)\n}\n\ndf <- ldply(datalist, data.frame)\n\ndf <- subset(df,df$X3 != \"\")\n\ndf[df == \"\"] <- NA\n\ndf <- cbind(df, data.frame(do.call('rbind', strsplit(as.character(df$X8),   ' ', fixed=TRUE))))\n\ndf <- cbind(df, data.frame(do.call('rbind', strsplit(as.character(df$X9),   ' ', fixed=TRUE))))\n\ndf <- df[, c(-8,-9)]\n\ndf <- df[, c(1,2,3,4,5,6,7,12,13,14,15,8,10,11,9)]\n\nnames(df) <- c(\"Pos\",\"RiderNumber\",\"Rider\",\"Nation\",\"Team\",\"Motorcycle\",\"Time\",\"FastLap\"\n               ,\"TotalLaps\",\"GapFront\",\"GapNext\",\"Speed\",\"Session\",\"Event\",\"URL\")\n\ndf$Time    <- ms(df$Time)\ndf$Time_S  <- period_to_seconds(ms(df$Time))\ndf$Year    <- sapply(sapply(\"2016\",as.character),as.numeric)\n\ndf[,c(1,2,8,9,10,11,12,16,17)] <- sapply(sapply(df[,c(1,2,8,9,10,11,12,16,17)], as.character), as.numeric)\n",
+    "created" : 1475545149412.000,
+    "dirty" : false,
+    "encoding" : "UTF-8",
+    "folds" : "",
+    "hash" : "4020672757",
+    "id" : "82464B71",
+    "lastKnownWriteTime" : 1474929777,
+    "last_content_update" : 1474929777,
+    "path" : "~/MotoGP Stats/Practice_Classification_Load.R",
+    "project_path" : "Practice_Classification_Load.R",
+    "properties" : {
+        "tempName" : "Untitled1"
+    },
+    "relative_order" : 5,
+    "source_on_save" : false,
+    "source_window" : "",
+    "type" : "r_source"
+}

@@ -1,0 +1,21 @@
+{
+    "collab_server" : "",
+    "contents" : "library(httr)\n\n\nurl <- \"http://api.glassdoor.com/api/api.htm?v=1&format=json&t.p=97900&t.k=bITUyHsfgGA&action=jobs-stats&q=Analyst&userip=172.68.58.127&useragent=Chrome/53.0.2785.143\"\n\nr <- GET(url)\n\n\ncontent(r, \"text\")\n\n\ngetwd()\n\n\n\nplot(mtcars$mpg, mtcars$wt, colors = mtcars$gear)\n",
+    "created" : 1475360653150.000,
+    "dirty" : true,
+    "encoding" : "",
+    "folds" : "",
+    "hash" : "3810922221",
+    "id" : "8EE3B2E9",
+    "lastKnownWriteTime" : 3419473789575321445,
+    "last_content_update" : 1475381078891,
+    "path" : null,
+    "project_path" : null,
+    "properties" : {
+        "tempName" : "Untitled1"
+    },
+    "relative_order" : 3,
+    "source_on_save" : false,
+    "source_window" : "",
+    "type" : "r_source"
+}

@@ -1,0 +1,9 @@
+{
+    "path" : "~/MotoGP Stats",
+    "sortOrder" : [
+        {
+            "ascending" : true,
+            "columnIndex" : 2
+        }
+    ]
+}

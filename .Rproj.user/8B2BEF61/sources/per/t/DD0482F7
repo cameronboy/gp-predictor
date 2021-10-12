@@ -1,0 +1,22 @@
+{
+    "collab_server" : "",
+    "contents" : "",
+    "created" : 1618160529828.000,
+    "dirty" : false,
+    "encoding" : "UTF-8",
+    "folds" : "",
+    "hash" : "2702650174",
+    "id" : "DD0482F7",
+    "lastKnownWriteTime" : 1632797080,
+    "last_content_update" : 1632797080987,
+    "path" : "~/MotoGP Stats/./Analysis_Load.R",
+    "project_path" : "Analysis_Load.R",
+    "properties" : {
+        "cursorPosition" : "24,21",
+        "scrollLine" : "6"
+    },
+    "relative_order" : 1,
+    "source_on_save" : false,
+    "source_window" : "",
+    "type" : "r_source"
+}
