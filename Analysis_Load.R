@@ -1,13 +1,14 @@
 library(tabulizer)
 library(miniUI)
 library(tidyverse)
+library(lubridate)
 library(purrr)
 library(slider)
 library(gt)
 
 #Some important Variables to define the overall list of sessions to process
 session <- c("FP1")#,"FP2","FP3","FP4","Q1","Q2","WUP")
-event   <- c("SPA")#,"ARG","AME","SPA","FRA","ITA","CAT","NED","GER","AUT","CZE","GBR","RSM")
+event   <- c("AME")#,"ARG","AME","SPA","FRA","ITA","CAT","NED","GER","AUT","CZE","GBR","RSM")
 j <- rep(sprintf(session), each = length(event)) 
 i <- sprintf(event)
 urls <- paste0("http://resources.motogp.com/files/results/2021/", i, "/MotoGP/", j,"/Analysis.pdf")
@@ -34,6 +35,10 @@ rexp_speed = "\\d{2,3}\\.\\d{1}(?!\\d)"
 rexp_rider_number = "(?<=(1st|2nd|3rd|4th|5th|6th|7th|8th|9th|0th)\\s)\\d+"
 rexp_run_number = "(?<=Run\\s?#\\s?)\\d+"
 rexp_lap_number = "\\d+(?=\\s)"
+rexp_lap_minutes = "^\\d+(?=\')"
+rexp_lap_seconds = "(?<=\\')\\d+\\.\\d+"
+
+
 #Get The Area Function
 GetArea <- function(x) {
   y <- vector('list',x)
@@ -78,7 +83,7 @@ results %>%
          run_number  = as.integer(str_extract(data, rexp_run_number)),
          riderNumber = as.integer(str_extract(data, rexp_rider_number)),
          pitting     = str_extract(data, 'P'),
-         invalidatedLap = str_extract(data, "\\*")) %>%
+         invalidatedLap = !is.na(str_extract(data, "\\*"))) %>%
   left_join(riders, c("riderNumber" = "X.1")) %>% 
   fill(c("riderNumber","X","Rider","Nation","Team","Motorcycle","run_number","FrontTire","RearTire","TotalLaps","FullLaps")) %>%
   slice(-1) %>%
@@ -115,8 +120,15 @@ results %>%
     Front_tire_age = min(Front_tire_age, na.rm=TRUE) + row_number() -1,
     Rear_tire_age = min(Rear_tire_age, na.rm=TRUE) + row_number() -1
   ) %>%
-  group_by()
+  group_by() %>%
+  filter(is_lap) %>%
+  select(-c("data", "is_lap")) %>%
+  mutate(LapMinutes =  as.integer(str_extract(LapTime, rexp_lap_minutes)),
+         LapSeconds = as.double(str_extract(LapTime, rexp_lap_seconds)),
+         LapTimeDuration = duration(minutes=LapMinutes, seconds = LapSeconds)
+  ) %>% 
+  print(n=100) 
+  # Duration in Pits 
+  # In Lap times 
+  # Out Lap times
   
-
-
-
