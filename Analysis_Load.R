@@ -1,13 +1,9 @@
 library(tabulizer)
-library(miniUI)
 library(tidyverse)
-library(purrr)
-library(slider)
-library(gt)
 
 #Some important Variables to define the overall list of sessions to process
-session <- c("FP1")#,"FP2","FP3","FP4","Q1","Q2","WUP")
-event   <- c("SPA")#,"ARG","AME","SPA","FRA","ITA","CAT","NED","GER","AUT","CZE","GBR","RSM")
+session <- c("RAC")#,"FP2","FP3","FP4","Q1","Q2","WUP")
+event   <- c("VAL")#,"ARG","AME","SPA","FRA","ITA","CAT","NED","GER","AUT","CZE","GBR","RSM")
 j <- rep(sprintf(session), each = length(event)) 
 i <- sprintf(event)
 urls <- paste0("http://resources.motogp.com/files/results/2021/", i, "/MotoGP/", j,"/Analysis.pdf")
@@ -27,13 +23,14 @@ rexp_pos = "\\d+(st|nd|rd|th)"
 rexp_total_laps = "(?<=Total laps\\=)\\d+"
 rexp_full_laps = "(?<=Full laps\\=)\\d+"
 rexp_runs = "(?<=Runs\\=)\\d+"
-rexp_f_tire = "(?<=(F|f)ront\s+Tyre\s+)(((S|s)lick|(W|w)et)-(Hard|Medium|Soft))"
-rexp_r_tire = "(?<=(R|r)ear\s+Tyre\s+)(((S|s)lick|(W|w)et)-(Hard|Medium|Soft))"
+rexp_f_tire = "(?<=(F|f)ront\\s{0,100}(T|t)yre\\s{0,100})(((S|s)lick|(W|w)et)-(Hard|Medium|Soft))"
+rexp_r_tire = "(?<=(R|r)ear\\s{0,100}(T|t)yre\\s{0,100})(((S|s)lick|(W|w)et)-(Hard|Medium|Soft))"
 rexp_tire_life = "(\\d+(?= Laps at start)|New Tyre)"
 rexp_speed = "\\d{2,3}\\.\\d{1}(?!\\d)"
 rexp_rider_number = "(?<=(1st|2nd|3rd|4th|5th|6th|7th|8th|9th|0th)\\s)\\d+"
 rexp_run_number = "(?<=Run\\s?#\\s?)\\d+"
 rexp_lap_number = "\\d+(?=\\s)"
+
 #Get The Area Function
 GetArea <- function(x) {
   y <- vector('list',x)
@@ -68,7 +65,7 @@ for ( i in seq(urls)) {
 
 riders <- extract_tables(entry_url, pages=1, guess=FALSE, area = list(entry_area), output = "data.frame")[[1]] %>%  as_tibble()
 
-results %>%
+df <- results %>%
   mutate(LapTime     = str_extract(data, rexp_times),
          TotalLaps   = as.integer(str_extract(data, rexp_total_laps)),
          FullLaps    = as.integer(str_extract(data, rexp_full_laps)),
@@ -84,10 +81,10 @@ results %>%
   slice(-1) %>%
   group_by(Rider, data) %>% 
   mutate(
-    T1 = as.double(str_extract_all(data, rexp_times)[[1]][2]),
-    T2 = as.double(str_extract_all(data, rexp_times)[[1]][3]),
-    T3 = as.double(str_extract_all(data, rexp_times)[[1]][4]),
-    T4 = as.double(str_extract_all(data, rexp_times)[[1]][5])
+    T1 = str_extract_all(data, rexp_times)[[1]][2],
+    T2 = str_extract_all(data, rexp_times)[[1]][3],
+    T3 = str_extract_all(data, rexp_times)[[1]][4],
+    T4 = str_extract_all(data, rexp_times)[[1]][5]
   ) %>% 
   mutate(
     Front_tire_age = str_extract_all(data, rexp_tire_life)[[1]][1],
@@ -115,8 +112,12 @@ results %>%
     Front_tire_age = min(Front_tire_age, na.rm=TRUE) + row_number() -1,
     Rear_tire_age = min(Rear_tire_age, na.rm=TRUE) + row_number() -1
   ) %>%
-  group_by()
+  group_by() 
   
 
+df %>%
+  filter(is_lap) %>% 
+  select()
+  print(n=500)
 
 
