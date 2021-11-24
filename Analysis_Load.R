@@ -3,8 +3,8 @@ library(purrr)
 library(ggplot2)
 
 #Some important Variables to define the overall list of sessions to process
-session <- c("Q2")#,"FP2","FP3","FP4","Q1","Q2","WUP")
-event   <- c("CAT")#,"ARG","AME","SPA","FRA","ITA","CAT","NED","GER","AUT","CZE","GBR","RSM")
+session <- c("FP3")#,"FP2","FP3","FP4","Q1","Q2","WUP")
+event   <- c("VAL")#,"ARG","AME","SPA","FRA","ITA","CAT","NED","GER","AUT","CZE","GBR","RSM")
 year <- 2021
 j <- rep(sprintf(session), each = length(event)) 
 i <- sprintf(event)
@@ -20,7 +20,7 @@ ZB <- c(40.90625, 317.9531255, 731.85, 576.778125)
 entry_area <- c(134.12389, 60.92034, 444.59587, 550.22420)
 
 # Regexps:
-rexp_times = "(\\d+\\'\\d{2}\\.\\d{3}|\\d{2,3}\\.\\d{3})"
+rexp_times = "(\\d+\\'\\d{2}\\.\\d{3}\\*?|\\d{2,3}\\.\\d{3}\\*?)"
 rexp_pos = "\\d+(st|nd|rd|th)"
 rexp_total_laps = "(?<=Total laps\\=)\\d+"
 rexp_full_laps = "(?<=Full laps\\=)\\d+"
@@ -29,7 +29,7 @@ rexp_f_tire = "(?<=(F|f)ront\\s{0,100}(T|t)yre\\s{0,100})(((S|s)lick|(W|w)et)-(H
 rexp_r_tire = "(?<=(R|r)ear\\s{0,100}(T|t)yre\\s{0,100})(((S|s)lick|(W|w)et)-(Hard|Medium|Soft))"
 rexp_tire_life = "(\\d+(?= Laps at start)|New Tyre)"
 rexp_speed = "\\d{2,3}\\.\\d{1}(?!\\d)"
-rexp_rider_number = "(?<=(1st|2nd|3rd|4th|5th|6th|7th|8th|9th|0th)\\s)\\d+"
+rexp_rider_number = "(?<=((\\d{1,2})?(1st|2nd|3rd|\\dth))\\s{0,100})\\d+"
 rexp_run_number = "(?<=Run\\s?#\\s?)\\d+"
 rexp_lap_number = "\\d+(?=\\s)"
 rexp_lap_minutes = "^\\d+(?=\\')"
@@ -55,7 +55,7 @@ for ( i in seq(urls)) {
   pages <- as.numeric(as.integer(seq(1, p + .5, .5)))
   area <- GetArea(2*p)
   
-  ts <- extract_tables(urls[i], pages = pages, guess = FALSE, area = area)
+  ts <- extract_tables(urls[i], pages = pages, guess = FALSE, area = area, encoding = "UTF-8")
   
   for (i in seq(length(ts)) ) {
     ts[[i]] <- ts[[i]][,which(!apply(ts[[i]],2,FUN = function(x){all(x == "")}))] %>% 
@@ -80,7 +80,8 @@ df <- results %>%
          run_number  = as.integer(str_extract(data, rexp_run_number)),
          riderNumber = as.integer(str_extract(data, rexp_rider_number)),
          pitting     = str_extract(data, 'P'),
-         invalidatedLap = !is.na(str_extract(data, "\\*"))) %>%
+         invalidatedLap = !is.na(str_extract(data, "\\*")),
+         lap_unfinished = str_extract(data, "unfinished") == "unfinished") %>% 
   left_join(riders, c("riderNumber" = "X.1")) %>% 
   fill(c("riderNumber","X","Rider","Nation","Team","Motorcycle","run_number","FrontTire","RearTire","TotalLaps","FullLaps")) %>%
   slice(-1) %>%
@@ -91,6 +92,7 @@ df <- results %>%
     T3 = str_extract_all(data, rexp_times)[[1]][4],
     T4 = str_extract_all(data, rexp_times)[[1]][5]
   ) %>% 
+  # filter(invalidatedLap)
   mutate(
     Front_tire_age = str_extract_all(data, rexp_tire_life)[[1]][1],
     Rear_tire_age  = str_extract_all(data, rexp_tire_life)[[1]][2],
@@ -112,7 +114,7 @@ df <- results %>%
   rename(
     riderDesc = X
   ) %>% 
-  select(data, is_lap, riderNumber, Rider:Motorcycle, riderDesc, TotalLaps, FullLaps, run_number, FrontTire, RearTire, Front_tire_age, Rear_tire_age, invalidatedLap, LapNumber, LapType, LapTime, T1, T2, T3, T4, speed) %>%
+  select(data, is_lap, riderNumber, Rider:Motorcycle, riderDesc, TotalLaps, FullLaps, run_number, FrontTire, RearTire, Front_tire_age, Rear_tire_age, invalidatedLap,lap_unfinished, LapNumber, LapType, LapTime, T1, T2, T3, T4, speed) %>%
   group_by() %>% 
   fill(c("Front_tire_age", "Rear_tire_age")) %>%
   group_by(Rider, run_number, is_lap) %>%
@@ -120,22 +122,25 @@ df <- results %>%
     Front_tire_age = min(Front_tire_age, na.rm=TRUE) + row_number() - 1,
     Rear_tire_age = min(Rear_tire_age, na.rm=TRUE) + row_number() - 1
   ) %>%
-  group_by() 
-  
-
-df %>%
-  filter(is_lap) %>% 
-  select()
-  print(n=500)
-  group_by() %>%
-  filter(is_lap) %>%
-  select(-c("is_lap")) %>%
-  mutate(LapMinutes =  as.integer(str_extract(LapTime, rexp_lap_minutes)),
-         LapSeconds = as.double(str_extract(LapTime, rexp_lap_seconds)),
-         LapTimeSeconds = as.double(duration(minutes=LapMinutes, seconds = LapSeconds))
+  group_by() %>% 
+  mutate(
+    Invalidated_T1 = str_extract(T1, "\\*") == "*",
+    Invalidated_T2 = str_extract(T2, "\\*") == "*",
+    Invalidated_T3 = str_extract(T3, "\\*") == "*",
+    Invalidated_T4 = str_extract(T4, "\\*") == "*",
+    T1 = str_replace(T1, "\\*", ""),
+    T2 = str_replace(T2, "\\*", ""),
+    T3 = str_replace(T3, "\\*", ""),
+    T4 = str_replace(T4, "\\*", ""),
+    LapMinutes =  as.integer(str_extract(LapTime, rexp_lap_minutes)),
+    LapSeconds = as.double(str_extract(LapTime, rexp_lap_seconds)),
+    LapTimeSeconds = as.double(duration(minutes=LapMinutes, seconds = LapSeconds))
   ) %>% 
-  select(-c("LapMinutes","LapSeconds"))
-
+  select(-LapMinutes, -LapSeconds, -data) %>% 
+  filter(is_lap) %>% 
+  print(n=50)
+  
+  
 
 # Convert all sectors to seconds if > 60 seconds -> then to double
 # Boolean columns indicating whether T1:T4 had the track limits infraction
@@ -143,6 +148,3 @@ df %>%
 
 
 
-df %>% 
-  # filter(riderNumber == 46) %>% 
-  print(n=500)
