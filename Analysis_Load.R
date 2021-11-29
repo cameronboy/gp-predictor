@@ -1,21 +1,15 @@
 library(tabulizer)
-library(miniUI)
 library(tidyverse)
 library(lubridate)
-library(purrr)
-library(ggplot2)
+
 
 
 
 #Some important Variables to define the overall list of sessions to process
-session <- c("Q2")#,"FP2","FP3","FP4","Q1","Q2","WUP")
-event   <- c("CAT")#,"ARG","AME","SPA","FRA","ITA","CAT","NED","GER","AUT","CZE","GBR","RSM")
-year <- 2021
-j <- rep(sprintf(session), each = length(event)) 
-i <- sprintf(event)
-urls <- paste0("http://resources.motogp.com/files/results/", year, "/", i, "/MotoGP/", j,"/Analysis.pdf")
-entry_url <- paste0("https://resources.motogp.com/files/results/", year, "/", i, "/MotoGP/Entry.pdf")
-ses <- paste(i, j, sep = "-")
+session <- c("RAC", "FP2")# ,"FP3","FP4","Q1","Q2","WUP","RAC")
+event   <- c("VAL")#"ARG","AME","SPA","FRA","ITA","CAT","NED","GER","AUT","CZE","GBR","RSM")
+year <- c(2021, 2020)
+
 
 AA <- c(164.88604, 53.921875, 731.85, 314.978125)
 AB <- c(164.88604, 317.953125, 731.85, 576.7781250)
@@ -25,7 +19,7 @@ ZB <- c(40.90625, 317.9531255, 731.85, 576.778125)
 entry_area <- c(134.12389, 60.92034, 444.59587, 550.22420)
 
 # Regexps:
-rexp_times = "(\\d+\\'\\d{2}\\.\\d{3}|\\d{2,3}\\.\\d{3})"
+rexp_times = "(\\d+\\'\\d{2}\\.\\d{3}\\*?|\\d{2,3}\\.\\d{3}\\*?)"
 rexp_pos = "\\d+(st|nd|rd|th)"
 rexp_total_laps = "(?<=Total laps\\=)\\d+"
 rexp_full_laps = "(?<=Full laps\\=)\\d+"
@@ -34,12 +28,47 @@ rexp_f_tire = "(?<=(F|f)ront\\s{0,100}Tyre\\s{0,100})(((S|s)lick|(W|w)et)-(Hard|
 rexp_r_tire = "(?<=(R|r)ear\\s{0,100}Tyre\\s{0,100})(((S|s)lick|(W|w)et)-(Hard|Medium|Soft))"
 rexp_tire_life = "(\\d+(?= Laps at start)|New Tyre)"
 rexp_speed = "\\d{2,3}\\.\\d{1}(?!\\d)"
-rexp_rider_number = "(?<=(1st|2nd|3rd|4th|5th|6th|7th|8th|9th|0th)\\s)\\d+"
+rexp_rider_number = "(?<=((\\d{1,2})?(1st|2nd|3rd|\\dth))\\s{0,100})\\d+"
 rexp_run_number = "(?<=Run\\s?#\\s?)\\d+"
 rexp_lap_number = "\\d+(?=\\s)"
 rexp_lap_minutes = "^\\d+(?=\\')"
 rexp_lap_seconds = "(?<=\\')\\d+\\.\\d+"
 
+
+
+events_df <- expand.grid(year, event, session) %>%
+  as_tibble() %>%
+  rename(year = Var1, event = Var2, session = Var3)
+
+entries_df <- events_df %>%
+  select(year, event) %>%
+  distinct()
+
+
+master_event_list <- split(events_df, seq(nrow(events_df)))
+entries_list <- split(entries_df, seq(nrow(entries_df)))
+
+
+
+createResultsUrl <- function(row) {
+  url <- c(
+    paste0("http://resources.motogp.com/files/results/", row$year, "/", row$event, "/MotoGP/", row$session,"/Analysis.pdf"),
+    row
+  )
+  url
+}
+
+createEntryUrl <- function(row) {
+  url <- c(
+    paste0("https://resources.motogp.com/files/results/", row$year, "/", row$event, "/MotoGP/Entry.pdf"),
+    row
+  )
+  url
+}
+
+
+results_urls <- map(master_event_list, createResultsUrl)
+entries_urls <- map(entries_list, createEntryUrl)
 
 #Get The Area Function
 GetArea <- function(x) {
@@ -53,29 +82,74 @@ GetArea <- function(x) {
   return(y)
 }
 
+cleanTables <- function(table_strings) {
+  table_strings[ ,which(!apply(table_strings,2,FUN = function(x){all(x == "")}))] %>% 
+    as_tibble() %>% 
+    unite("data", sep=" ")
+}
 
-
-for ( i in seq(urls)) {
-  p <- get_n_pages(urls[i])
+processResultsUrl <- function(url_data){
+  
+  url <- url_data[[1]]
+  year_ <- url_data[[2]]
+  event_ <- url_data[[3]]
+  session_ <- url_data[[4]]
+  p <- get_n_pages(url)
   pages <- as.numeric(as.integer(seq(1, p + .5, .5)))
   area <- GetArea(2*p)
   
-  ts <- extract_tables(urls[i], pages = pages, guess = FALSE, area = area)
-  
-  for (i in seq(length(ts)) ) {
-    ts[[i]] <- ts[[i]][,which(!apply(ts[[i]],2,FUN = function(x){all(x == "")}))] %>% 
-      as_tibble() %>% 
-      unite("data", sep=" ")
-  }
+  ts <- extract_tables(url, pages = pages, guess = FALSE, area = area)
+
+  ts <- map(ts, cleanTables)
+  print(url)
   
   results <- ts %>% 
-    reduce(rbind)
-    
+    reduce(rbind) %>% 
+    as_tibble() %>% 
+    mutate(
+      year = year_,
+      event = event_,
+      session = session_
+    )
+  
+  results
 }
 
-riders <- extract_tables(entry_url, pages=1, guess=FALSE, area = list(entry_area), output = "data.frame")[[1]] %>%  as_tibble()
+processEntriesUrl <- function(url_data){
+  url <- url_data[[1]]
+  year_ <- url_data[[2]]
+  event_ <- url_data[[3]]
+  riders <- extract_tables(url, pages=1, guess=FALSE, area = list(entry_area), output = "data.frame")[[1]] %>%
+    as_tibble() %>% 
+    mutate(
+      year = year_,
+      event = event_
+    ) %>% 
+    rename(riderNumber = X.1)
+  
+  riders
+  
+}
 
-df <- results %>%
+convertTime <- function(string){
+  if (!is.na(str_match(string, "^\\d+\\'\\d{2}\\.\\d{3}$")[1])) {
+    minutes <- str_extract(string, rexp_lap_minutes)
+    seconds <- str_extract(string, rexp_lap_seconds)
+    time <- as.double(minutes) * 60 + as.double(seconds)
+  } else {
+    time <- as.double(string)
+  }
+  
+  time
+}
+
+results <- map(results_urls, processResultsUrl) %>% reduce(rbind) %>% as_tibble()
+
+entries <- map(entries_urls, processEntriesUrl) %>% reduce(rbind) %>% as_tibble()
+
+
+
+df <- results %>% 
   mutate(LapTime     = str_extract(data, rexp_times),
          TotalLaps   = as.integer(str_extract(data, rexp_total_laps)),
          FullLaps    = as.integer(str_extract(data, rexp_full_laps)),
@@ -85,8 +159,9 @@ df <- results %>%
          run_number  = as.integer(str_extract(data, rexp_run_number)),
          riderNumber = as.integer(str_extract(data, rexp_rider_number)),
          pitting     = str_extract(data, 'P'),
-         invalidatedLap = !is.na(str_extract(data, "\\*"))) %>%
-  left_join(riders, c("riderNumber" = "X.1")) %>% 
+         invalidatedLap = !is.na(str_extract(data, "\\*")),
+         lap_unfinished = str_extract(data, "unfinished") == "unfinished") %>% 
+  left_join(entries, by = c("year", "event", "riderNumber")) %>% 
   fill(c("riderNumber","X","Rider","Nation","Team","Motorcycle","run_number","FrontTire","RearTire","TotalLaps","FullLaps")) %>%
   slice(-1) %>%
   group_by(Rider, data) %>% 
@@ -117,7 +192,7 @@ df <- results %>%
   rename(
     riderDesc = X
   ) %>% 
-  select(data, is_lap, riderNumber, Rider:Motorcycle, riderDesc, TotalLaps, FullLaps, run_number, FrontTire, RearTire, Front_tire_age, Rear_tire_age, invalidatedLap, LapNumber, LapType, LapTime, T1, T2, T3, T4, speed) %>%
+  select(data, is_lap, year, event, session, riderNumber, Rider:Motorcycle, riderDesc, TotalLaps, FullLaps, run_number, FrontTire, RearTire, Front_tire_age, Rear_tire_age, invalidatedLap,lap_unfinished, LapNumber, LapType, LapTime, T1, T2, T3, T4, speed) %>%
   group_by() %>% 
   fill(c("Front_tire_age", "Rear_tire_age")) %>%
   group_by(Rider, run_number, is_lap) %>%
@@ -126,20 +201,29 @@ df <- results %>%
     Rear_tire_age = min(Rear_tire_age, na.rm=TRUE) + row_number() - 1
   ) %>%
   group_by() %>%
-  filter(is_lap) %>%
-  select(-c("is_lap")) %>%
-  mutate(LapMinutes =  as.integer(str_extract(LapTime, rexp_lap_minutes)),
-         LapSeconds = as.double(str_extract(LapTime, rexp_lap_seconds)),
-         LapTimeSeconds = as.double(duration(minutes=LapMinutes, seconds = LapSeconds))
-  ) %>% 
-  select(-c("LapMinutes","LapSeconds"))
+  filter(is_lap) %>% 
+  select(-is_lap) %>% 
+  mutate(
+    Invalidated_T1 = str_extract(T1, "\\*") == "*",
+    Invalidated_T2 = str_extract(T2, "\\*") == "*",
+    Invalidated_T3 = str_extract(T3, "\\*") == "*",
+    Invalidated_T4 = str_extract(T4, "\\*") == "*",
+    T1 = str_replace(T1, "\\*", ""),
+    T2 = str_replace(T2, "\\*", ""),
+    T3 = str_replace(T3, "\\*", ""),
+    T4 = str_replace(T4, "\\*", ""),
+    T1 = case_when(!is.na(T1) ~ 5555555)
+  )
 
 
 # Convert all sectors to seconds if > 60 seconds -> then to double
-# Boolean columns indicating whether T1:T4 had the track limits infraction
 # start an aggregating & dimensioning table
 
 
 df %>% 
-  # filter(riderNumber == 46) %>% 
-  print(n=500)
+  select(T1, LapTime) %>% 
+  mutate(
+    ghg = convertTime(LapTime)
+  )
+
+df %>% select(T1) %>% distinct() %>%  arrange(asc(T1)) %>% print(n=50)
