@@ -131,17 +131,8 @@ processEntriesUrl <- function(url_data){
   
 }
 
-convertTime <- function(string){
-  if (!is.na(str_match(string, "^\\d+\\'\\d{2}\\.\\d{3}$")[1])) {
-    minutes <- str_extract(string, rexp_lap_minutes)
-    seconds <- str_extract(string, rexp_lap_seconds)
-    time <- as.double(minutes) * 60 + as.double(seconds)
-  } else {
-    time <- as.double(string)
-  }
-  
-  time
-}
+
+
 
 results <- map(results_urls, processResultsUrl) %>% reduce(rbind) %>% as_tibble()
 
@@ -159,7 +150,7 @@ df <- results %>%
          riderNumber = as.integer(str_extract(data, rexp_rider_number)),
          pitting     = str_extract(data, 'P'),
          invalidatedLap = !is.na(str_extract(data, "\\*")),
-         lap_unfinished = str_extract(data, "unfinished") == "unfinished",
+         lap_unfinished = case_when(str_extract(data, "unfinished") == "unfinished" ~ TRUE, TRUE ~ FALSE),
          LapTime     = case_when((!is.na(lap_unfinished) & !lap_unfinished) ~ str_extract(data, rexp_times))
   ) %>% 
   left_join(entries, by = c("year", "event", "riderNumber")) %>% 
@@ -212,20 +203,47 @@ df <- results %>%
     T1 = str_replace(T1, "\\*", ""),
     T2 = str_replace(T2, "\\*", ""),
     T3 = str_replace(T3, "\\*", ""),
-    T4 = str_replace(T4, "\\*", "")
+    T4 = str_replace(T4, "\\*", ""),
+    LapTimeSeconds = as.double(str_extract(LapTime, rexp_lap_minutes)) * 60.0 + as.double(str_extract(LapTime, rexp_lap_seconds)),
+    T1 = if_else(!is.na(str_match(T1, "\\d+\\'\\d{2}\\.\\d{3}")),
+                 as.double(str_extract(T1, rexp_lap_minutes)) * 60.0 + as.double(str_extract(T1, rexp_lap_seconds)),
+                 as.double(T1)),
+    T2 = if_else(!is.na(str_match(T2, "\\d+\\'\\d{2}\\.\\d{3}")),
+                 as.double( str_extract(T2, rexp_lap_minutes)) * 60.0 + as.double(str_extract(T2, rexp_lap_seconds)),
+                 as.double(T2)),
+    T3 = if_else(!is.na(str_match(T3, "\\d+\\'\\d{2}\\.\\d{3}")),
+                 as.double( str_extract(T3, rexp_lap_minutes)) * 60.0 + as.double(str_extract(T3, rexp_lap_seconds)),
+                 as.double(T3)),
+    T4 = if_else(!is.na(str_match(T4, "\\d+\\'\\d{2}\\.\\d{3}")),
+                 as.double(str_extract(T4, rexp_lap_minutes)) * 60.0 + as.double(str_extract(T4, rexp_lap_seconds)),
+                 as.double(T4))
   )
+    
 
 
-# Convert all sectors to seconds if > 60 seconds -> then to double
+
 # start an aggregating & dimensioning table
+# Still getting issues wiht T1 and converting M'SS.sss to seconds.
 
 
-
-
-df %>% 
-  select(data, LapTime, T1:T4) %>% 
+x <- df %>% 
+  select(data, Rider, riderNumber, LapTime, T1:T4) %>% 
   mutate(
-    zz = convertTime(T1)
-  ) %>% 
-  print(n=500)
-
+    T1 = str_replace(T1, "\\*", ""),
+    T2 = str_replace(T2, "\\*", ""),
+    T3 = str_replace(T3, "\\*", ""),
+    T4 = str_replace(T4, "\\*", ""),
+    LapTimeSeconds = as.double(str_extract(LapTime, rexp_lap_minutes)) * 60.0 + as.double(str_extract(LapTime, rexp_lap_seconds)),
+    T1 = if_else(!is.na(str_match(T1, "\\d+\\'\\d{2}\\.\\d{3}")),
+                 as.double(str_extract(T1, rexp_lap_minutes)) * 60.0 + as.double(str_extract(T1, rexp_lap_seconds)),
+                 as.double(T1)),
+    T2 = if_else(!is.na(str_match(T2, "\\d+\\'\\d{2}\\.\\d{3}")),
+                 as.double( str_extract(T2, rexp_lap_minutes)) * 60.0 + as.double(str_extract(T2, rexp_lap_seconds)),
+                 as.double(T2)),
+    T3 = if_else(!is.na(str_match(T3, "\\d+\\'\\d{2}\\.\\d{3}")),
+                 as.double( str_extract(T3, rexp_lap_minutes)) * 60.0 + as.double(str_extract(T3, rexp_lap_seconds)),
+                 as.double(T3)),
+    T4 = if_else(!is.na(str_match(T4, "\\d+\\'\\d{2}\\.\\d{3}")),
+                 as.double(str_extract(T4, rexp_lap_minutes)) * 60.0 + as.double(str_extract(T4, rexp_lap_seconds)),
+                 as.double(T4))
+  )
