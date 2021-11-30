@@ -6,9 +6,9 @@ library(lubridate)
 
 
 #Some important Variables to define the overall list of sessions to process
-session <- c("RAC", "FP2")# ,"FP3","FP4","Q1","Q2","WUP","RAC")
+session <- c("FP3", "FP1", "FP2")# ,"FP3","FP4","Q1","Q2","WUP","RAC")
 event   <- c("VAL")#"ARG","AME","SPA","FRA","ITA","CAT","NED","GER","AUT","CZE","GBR","RSM")
-year <- c(2021, 2020)
+year <- c(2021)
 
 
 AA <- c(164.88604, 53.921875, 731.85, 314.978125)
@@ -150,8 +150,7 @@ entries <- map(entries_urls, processEntriesUrl) %>% reduce(rbind) %>% as_tibble(
 
 
 df <- results %>% 
-  mutate(LapTime     = str_extract(data, rexp_times),
-         TotalLaps   = as.integer(str_extract(data, rexp_total_laps)),
+  mutate(TotalLaps   = as.integer(str_extract(data, rexp_total_laps)),
          FullLaps    = as.integer(str_extract(data, rexp_full_laps)),
          speed       = as.double(str_extract(data, rexp_speed)),
          FrontTire   = str_extract(data, rexp_f_tire),
@@ -160,7 +159,9 @@ df <- results %>%
          riderNumber = as.integer(str_extract(data, rexp_rider_number)),
          pitting     = str_extract(data, 'P'),
          invalidatedLap = !is.na(str_extract(data, "\\*")),
-         lap_unfinished = str_extract(data, "unfinished") == "unfinished") %>% 
+         lap_unfinished = str_extract(data, "unfinished") == "unfinished",
+         LapTime     = case_when((!is.na(lap_unfinished) & !lap_unfinished) ~ str_extract(data, rexp_times))
+  ) %>% 
   left_join(entries, by = c("year", "event", "riderNumber")) %>% 
   fill(c("riderNumber","X","Rider","Nation","Team","Motorcycle","run_number","FrontTire","RearTire","TotalLaps","FullLaps")) %>%
   slice(-1) %>%
@@ -211,8 +212,7 @@ df <- results %>%
     T1 = str_replace(T1, "\\*", ""),
     T2 = str_replace(T2, "\\*", ""),
     T3 = str_replace(T3, "\\*", ""),
-    T4 = str_replace(T4, "\\*", ""),
-    T1 = case_when(!is.na(T1) ~ 5555555)
+    T4 = str_replace(T4, "\\*", "")
   )
 
 
@@ -220,10 +220,12 @@ df <- results %>%
 # start an aggregating & dimensioning table
 
 
-df %>% 
-  select(T1, LapTime) %>% 
-  mutate(
-    ghg = convertTime(LapTime)
-  )
 
-df %>% select(T1) %>% distinct() %>%  arrange(asc(T1)) %>% print(n=50)
+
+df %>% 
+  select(data, LapTime, T1:T4) %>% 
+  mutate(
+    zz = convertTime(T1)
+  ) %>% 
+  print(n=500)
+
