@@ -6,8 +6,8 @@ library(lubridate)
 
 
 #Some important Variables to define the overall list of sessions to process
-session <- c("FP3", "FP1", "FP2")# ,"FP3","FP4","Q1","Q2","WUP","RAC")
-event   <- c("VAL")#"ARG","AME","SPA","FRA","ITA","CAT","NED","GER","AUT","CZE","GBR","RSM")
+session <- c("FP1", "FP2", "FP3" ,"FP4","Q1","Q2","WUP","RAC")
+event <- c("QAT", "DOH", "POR", "SPA", "FRA", "ITA", "CAT", "GER", "NED", "STY", "AUT", "GBR", "ARA", "RSM", "AME", "EMI", "ALR", "VAL")
 year <- c(2021)
 
 
@@ -20,7 +20,7 @@ entry_area <- c(134.12389, 60.92034, 444.59587, 550.22420)
 
 # Regexps:
 rexp_times = "(\\d+\\'\\d{2}\\.\\d{3}\\*?|\\d{2,3}\\.\\d{3}\\*?)"
-rexp_pos = "\\d+(st|nd|rd|th)"
+rexp_pos = "(\\d+)(?=(st|nd|rd|th))"
 rexp_total_laps = "(?<=Total laps\\=)\\d+"
 rexp_full_laps = "(?<=Full laps\\=)\\d+"
 rexp_runs = "(?<=Runs\\=)\\d+"
@@ -151,10 +151,11 @@ df <- results %>%
          pitting     = str_extract(data, 'P'),
          invalidatedLap = !is.na(str_extract(data, "\\*")),
          lap_unfinished = case_when(str_extract(data, "unfinished") == "unfinished" ~ TRUE, TRUE ~ FALSE),
-         LapTime     = case_when((!is.na(lap_unfinished) & !lap_unfinished) ~ str_extract(data, rexp_times))
+         LapTime     = case_when((!is.na(lap_unfinished) & !lap_unfinished) ~ str_extract(data, rexp_times)),
+         RiderPosition = as.integer(str_extract(data, rexp_pos))
   ) %>% 
   left_join(entries, by = c("year", "event", "riderNumber")) %>% 
-  fill(c("riderNumber","X","Rider","Nation","Team","Motorcycle","run_number","FrontTire","RearTire","TotalLaps","FullLaps")) %>%
+  fill(c("riderNumber","X","Rider","Nation","Team","Motorcycle","run_number","FrontTire","RearTire","TotalLaps","FullLaps", "RiderPosition")) %>%
   slice(-1) %>%
   group_by(Rider, data) %>% 
   mutate(
@@ -170,7 +171,7 @@ df <- results %>%
     Rear_tire_age = as.integer(recode(Rear_tire_age, "New Tyre" = "0")),
     is_lap = !is.na(LapTime)
   ) %>%
-  group_by(Rider, is_lap) %>% 
+  group_by(Rider, is_lap, year, event, session) %>% 
   mutate(
     LapNumber = case_when(is_lap ~row_number()),
     LapType =  case_when(
@@ -184,17 +185,17 @@ df <- results %>%
   rename(
     riderDesc = X
   ) %>% 
-  select(data, is_lap, year, event, session, riderNumber, Rider:Motorcycle, riderDesc, TotalLaps, FullLaps, run_number, FrontTire, RearTire, Front_tire_age, Rear_tire_age, invalidatedLap,lap_unfinished, LapNumber, LapType, LapTime, T1, T2, T3, T4, speed) %>%
+  select(data, is_lap, year, event, session, RiderPosition, riderNumber, Rider:Motorcycle, riderDesc, TotalLaps, FullLaps, run_number, FrontTire, RearTire, Front_tire_age, Rear_tire_age, invalidatedLap,lap_unfinished, LapNumber, LapType, LapTime, T1, T2, T3, T4, speed) %>%
   group_by() %>% 
   fill(c("Front_tire_age", "Rear_tire_age")) %>%
-  group_by(Rider, run_number, is_lap) %>%
+  group_by(Rider, run_number, is_lap, year, event, session) %>%
   mutate(
     Front_tire_age = min(Front_tire_age, na.rm=TRUE) + row_number() - 1,
     Rear_tire_age = min(Rear_tire_age, na.rm=TRUE) + row_number() - 1
   ) %>%
   group_by() %>%
-  filter(is_lap) %>% 
-  select(-is_lap) %>% 
+  filter(is_lap) %>%
+  select(-is_lap) %>%
   mutate(
     Invalidated_T1 = str_extract(T1, "\\*") == "*",
     Invalidated_T2 = str_extract(T2, "\\*") == "*",
@@ -217,33 +218,21 @@ df <- results %>%
     T4 = if_else(!is.na(str_match(T4, "\\d+\\'\\d{2}\\.\\d{3}")),
                  as.double(str_extract(T4, rexp_lap_minutes)) * 60.0 + as.double(str_extract(T4, rexp_lap_seconds)),
                  as.double(T4))
-  )
-    
+  ) %>% 
+  group_by(Rider, riderNumber, year, event, session) %>% 
+  mutate(
+    session_rank_value = case_when(
+      session == "RAC" ~ sum(LapTimeSeconds, na.rm=TRUE),
+      TRUE ~ min(LapTimeSeconds[LapType == "Speed"]), na.rm=TRUE)
+  ) %>% 
+  group_by(year, event, session) %>% 
+  mutate(
+    session_rank = dense_rank(session_rank_value, na.rm=TRUE)
+  ) %>%
+  write.csv('MotoGP_2021.csv', na = "")
+
 
 
 
 # start an aggregating & dimensioning table
-# Still getting issues wiht T1 and converting M'SS.sss to seconds.
 
-
-x <- df %>% 
-  select(data, Rider, riderNumber, LapTime, T1:T4) %>% 
-  mutate(
-    T1 = str_replace(T1, "\\*", ""),
-    T2 = str_replace(T2, "\\*", ""),
-    T3 = str_replace(T3, "\\*", ""),
-    T4 = str_replace(T4, "\\*", ""),
-    LapTimeSeconds = as.double(str_extract(LapTime, rexp_lap_minutes)) * 60.0 + as.double(str_extract(LapTime, rexp_lap_seconds)),
-    T1 = if_else(!is.na(str_match(T1, "\\d+\\'\\d{2}\\.\\d{3}")),
-                 as.double(str_extract(T1, rexp_lap_minutes)) * 60.0 + as.double(str_extract(T1, rexp_lap_seconds)),
-                 as.double(T1)),
-    T2 = if_else(!is.na(str_match(T2, "\\d+\\'\\d{2}\\.\\d{3}")),
-                 as.double( str_extract(T2, rexp_lap_minutes)) * 60.0 + as.double(str_extract(T2, rexp_lap_seconds)),
-                 as.double(T2)),
-    T3 = if_else(!is.na(str_match(T3, "\\d+\\'\\d{2}\\.\\d{3}")),
-                 as.double( str_extract(T3, rexp_lap_minutes)) * 60.0 + as.double(str_extract(T3, rexp_lap_seconds)),
-                 as.double(T3)),
-    T4 = if_else(!is.na(str_match(T4, "\\d+\\'\\d{2}\\.\\d{3}")),
-                 as.double(str_extract(T4, rexp_lap_minutes)) * 60.0 + as.double(str_extract(T4, rexp_lap_seconds)),
-                 as.double(T4))
-  )
