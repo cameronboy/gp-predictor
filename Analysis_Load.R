@@ -6,8 +6,8 @@ library(lubridate)
 
 
 #Some important Variables to define the overall list of sessions to process
-session <- c("FP1", "FP2", "FP3" ,"FP4","Q1","Q2","WUP","RAC")
-event <- c("QAT", "DOH", "POR", "SPA", "FRA", "ITA", "CAT", "GER", "NED", "STY", "AUT", "GBR", "ARA", "RSM", "AME", "EMI", "ALR", "VAL")
+session <- c("FP1", "FP2")# , "FP3" ,"FP4","Q1","Q2","WUP","RAC")
+event <- c("QAT", "DOH")#, "POR", "SPA", "FRA", "ITA", "CAT", "GER", "NED", "STY", "AUT", "GBR", "ARA", "RSM", "AME", "EMI", "ALR", "VAL")
 year <- c(2021)
 
 
@@ -219,20 +219,35 @@ df <- results %>%
                  as.double(str_extract(T4, rexp_lap_minutes)) * 60.0 + as.double(str_extract(T4, rexp_lap_seconds)),
                  as.double(T4))
   ) %>% 
-  group_by(Rider, riderNumber, year, event, session) %>% 
-  mutate(
-    session_rank_value = case_when(
-      session == "RAC" ~ sum(LapTimeSeconds, na.rm=TRUE),
-      TRUE ~ min(LapTimeSeconds[LapType == "Speed"]), na.rm=TRUE)
+  group_by(Rider, riderNumber, year, event, session)
+
+
+
+
+
+practice <- df %>% filter(session != 'RAC')
+races <- df %>%  filter(session == 'RAC')
+
+
+G <- df %>% 
+  gather(key="sector", value="sector_time", T1, T2, T3, T4) %>%
+  filter(LapType == "Speed") %>% 
+  group_by(
+    year, event, session, riderNumber, Rider, sector
   ) %>% 
-  group_by(year, event, session) %>% 
   mutate(
-    session_rank = dense_rank(session_rank_value, na.rm=TRUE)
-  ) %>%
-  write.csv('MotoGP_2021.csv', na = "")
-
-
-
-
-# start an aggregating & dimensioning table
+    sector_mean = mean(sector_time, na.rm=TRUE),
+    sector_std = sd(sector_time, na.rm=TRUE)
+  ) %>% 
+  filter(
+    riderNumber == 5 &
+    event == "DOH" &
+    session == "FP1"
+  ) %>% 
+  arrange(run_number, LapNumber) %>% 
+  spread(
+    key="sector",
+    value=c(sector_mean,sector_std)
+  )
+  
 
