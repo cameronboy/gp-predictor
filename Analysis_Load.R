@@ -6,7 +6,7 @@ library(lubridate)
 
 
 #Some important Variables to define the overall list of sessions to process
-session <- c("FP1", "FP2")# , "FP3" ,"FP4","Q1","Q2","WUP","RAC")
+session <- c("FP1", "FP2", "RAC")# , "FP3" ,"FP4","Q1","Q2","WUP","RAC")
 event <- c("QAT", "DOH")#, "POR", "SPA", "FRA", "ITA", "CAT", "GER", "NED", "STY", "AUT", "GBR", "ARA", "RSM", "AME", "EMI", "ALR", "VAL")
 year <- c(2021)
 
@@ -125,7 +125,13 @@ processEntriesUrl <- function(url_data){
       year = year_,
       event = event_
     ) %>% 
-    rename(riderNumber = X.1)
+    rename(
+      rider_number = X.1,
+      rider = Rider,
+      nation = Nation,
+      team = Team,
+      motorcycle = Motorcycle
+    )
   
   riders
   
@@ -141,23 +147,23 @@ entries <- map(entries_urls, processEntriesUrl) %>% reduce(rbind) %>% as_tibble(
 
 
 df <- results %>% 
-  mutate(TotalLaps   = as.integer(str_extract(data, rexp_total_laps)),
-         FullLaps    = as.integer(str_extract(data, rexp_full_laps)),
+  mutate(total_laps   = as.integer(str_extract(data, rexp_total_laps)),
+         full_laps    = as.integer(str_extract(data, rexp_full_laps)),
          speed       = as.double(str_extract(data, rexp_speed)),
-         FrontTire   = str_extract(data, rexp_f_tire),
-         RearTire    = str_extract(data, rexp_r_tire),
+         front_tire   = str_extract(data, rexp_f_tire),
+         rear_tire    = str_extract(data, rexp_r_tire),
          run_number  = as.integer(str_extract(data, rexp_run_number)),
-         riderNumber = as.integer(str_extract(data, rexp_rider_number)),
+         rider_number = as.integer(str_extract(data, rexp_rider_number)),
          pitting     = str_extract(data, 'P'),
-         invalidatedLap = !is.na(str_extract(data, "\\*")),
+         lap_invalidated = !is.na(str_extract(data, "\\*")),
          lap_unfinished = case_when(str_extract(data, "unfinished") == "unfinished" ~ TRUE, TRUE ~ FALSE),
-         LapTime     = case_when((!is.na(lap_unfinished) & !lap_unfinished) ~ str_extract(data, rexp_times)),
-         RiderPosition = as.integer(str_extract(data, rexp_pos))
+         lap_time     = case_when((!is.na(lap_unfinished) & !lap_unfinished) ~ str_extract(data, rexp_times)),
+         rider_position = as.integer(str_extract(data, rexp_pos))
   ) %>% 
-  left_join(entries, by = c("year", "event", "riderNumber")) %>% 
-  fill(c("riderNumber","X","Rider","Nation","Team","Motorcycle","run_number","FrontTire","RearTire","TotalLaps","FullLaps", "RiderPosition")) %>%
+  left_join(entries, by = c("year", "event", "rider_number")) %>% 
+  fill(c("rider_number","X","rider","nation","team","motorcycle","run_number","front_tire","rear_tire","total_laps","full_laps", "rider_position")) %>%
   slice(-1) %>%
-  group_by(Rider, data) %>% 
+  group_by(rider, data) %>% 
   mutate(
     T1 = str_extract_all(data, rexp_times)[[1]][2],
     T2 = str_extract_all(data, rexp_times)[[1]][3],
@@ -165,47 +171,47 @@ df <- results %>%
     T4 = str_extract_all(data, rexp_times)[[1]][5]
   ) %>% 
   mutate(
-    Front_tire_age = str_extract_all(data, rexp_tire_life)[[1]][1],
-    Rear_tire_age  = str_extract_all(data, rexp_tire_life)[[1]][2],
-    Front_tire_age = as.integer(recode(Front_tire_age, "New Tyre" = "0")),
-    Rear_tire_age = as.integer(recode(Rear_tire_age, "New Tyre" = "0")),
-    is_lap = !is.na(LapTime)
+    front_tire_age = str_extract_all(data, rexp_tire_life)[[1]][1],
+    rear_tire_age  = str_extract_all(data, rexp_tire_life)[[1]][2],
+    front_tire_age = as.integer(recode(front_tire_age, "New Tyre" = "0")),
+    rear_tire_age = as.integer(recode(rear_tire_age, "New Tyre" = "0")),
+    is_lap = !is.na(lap_time)
   ) %>%
-  group_by(Rider, is_lap, year, event, session) %>% 
+  group_by(rider, is_lap, year, event, session) %>% 
   mutate(
-    LapNumber = case_when(is_lap ~row_number()),
-    LapType =  case_when(
+    lap_number = case_when(is_lap ~row_number()),
+    lap_type =  case_when(
       !is.na(pitting) & is_lap ~ "In",
       !is.na(lag(pitting)) & is_lap  ~ "Out",
-      LapNumber == 1 ~ "Out",
+      lap_number == 1 ~ "Out",
       TRUE ~ "Speed"
     ),
     run_number = case_when(is_lap ~ run_number)
   ) %>%
   rename(
-    riderDesc = X
+    rider_classification = X
   ) %>% 
-  select(data, is_lap, year, event, session, RiderPosition, riderNumber, Rider:Motorcycle, riderDesc, TotalLaps, FullLaps, run_number, FrontTire, RearTire, Front_tire_age, Rear_tire_age, invalidatedLap,lap_unfinished, LapNumber, LapType, LapTime, T1, T2, T3, T4, speed) %>%
+  select(data, is_lap, year, event, session, rider_position, rider_number, rider:motorcycle, rider_classification, total_laps, full_laps, run_number, front_tire, rear_tire, front_tire_age, rear_tire_age, lap_invalidated,lap_unfinished, lap_number, lap_type, lap_time, T1, T2, T3, T4, speed) %>%
   group_by() %>% 
-  fill(c("Front_tire_age", "Rear_tire_age")) %>%
-  group_by(Rider, run_number, is_lap, year, event, session) %>%
+  fill(c("front_tire_age", "rear_tire_age")) %>%
+  group_by(rider, run_number, is_lap, year, event, session) %>%
   mutate(
-    Front_tire_age = min(Front_tire_age, na.rm=TRUE) + row_number() - 1,
-    Rear_tire_age = min(Rear_tire_age, na.rm=TRUE) + row_number() - 1
+    front_tire_age = min(front_tire_age, na.rm=TRUE) + row_number() - 1,
+    rear_tire_age = min(rear_tire_age, na.rm=TRUE) + row_number() - 1
   ) %>%
   group_by() %>%
   filter(is_lap) %>%
   select(-is_lap) %>%
   mutate(
-    Invalidated_T1 = str_extract(T1, "\\*") == "*",
-    Invalidated_T2 = str_extract(T2, "\\*") == "*",
-    Invalidated_T3 = str_extract(T3, "\\*") == "*",
-    Invalidated_T4 = str_extract(T4, "\\*") == "*",
+    invalidated_T1 = str_extract(T1, "\\*") == "*",
+    invalidated_T2 = str_extract(T2, "\\*") == "*",
+    invalidated_T3 = str_extract(T3, "\\*") == "*",
+    invalidated_T4 = str_extract(T4, "\\*") == "*",
     T1 = str_replace(T1, "\\*", ""),
     T2 = str_replace(T2, "\\*", ""),
     T3 = str_replace(T3, "\\*", ""),
     T4 = str_replace(T4, "\\*", ""),
-    LapTimeSeconds = as.double(str_extract(LapTime, rexp_lap_minutes)) * 60.0 + as.double(str_extract(LapTime, rexp_lap_seconds)),
+    lap_time_seconds = as.double(str_extract(lap_time, rexp_lap_minutes)) * 60.0 + as.double(str_extract(lap_time, rexp_lap_seconds)),
     T1 = if_else(!is.na(str_match(T1, "\\d+\\'\\d{2}\\.\\d{3}")),
                  as.double(str_extract(T1, rexp_lap_minutes)) * 60.0 + as.double(str_extract(T1, rexp_lap_seconds)),
                  as.double(T1)),
@@ -218,36 +224,26 @@ df <- results %>%
     T4 = if_else(!is.na(str_match(T4, "\\d+\\'\\d{2}\\.\\d{3}")),
                  as.double(str_extract(T4, rexp_lap_minutes)) * 60.0 + as.double(str_extract(T4, rexp_lap_seconds)),
                  as.double(T4))
-  ) %>% 
-  group_by(Rider, riderNumber, year, event, session)
+  ) 
+
+
+df %>% write.csv('MotoGP_2021.csv')
 
 
 
 
 
 practice <- df %>% filter(session != 'RAC')
-races <- df %>%  filter(session == 'RAC')
+races <- df %>%
+  filter(session == 'RAC') %>%
+  select(year, event, rider_number, rider_position) %>%
+  rename(y = rider_position) %>% 
+  mutate(y = as.factor(y)) %>% 
+  distinct()
+
+practice %>% 
+  left_join(races, by = c("year", "event", "rider_number")) %>% 
+  select(year, event, session, rider_number, y)
 
 
-G <- df %>% 
-  gather(key="sector", value="sector_time", T1, T2, T3, T4) %>%
-  filter(LapType == "Speed") %>% 
-  group_by(
-    year, event, session, riderNumber, Rider, sector
-  ) %>% 
-  mutate(
-    sector_mean = mean(sector_time, na.rm=TRUE),
-    sector_std = sd(sector_time, na.rm=TRUE)
-  ) %>% 
-  filter(
-    riderNumber == 5 &
-    event == "DOH" &
-    session == "FP1"
-  ) %>% 
-  arrange(run_number, LapNumber) %>% 
-  spread(
-    key="sector",
-    value=c(sector_mean,sector_std)
-  )
-  
 
